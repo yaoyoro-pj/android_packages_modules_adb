@@ -64,7 +64,21 @@
 #if defined(__ANDROID__)
 static const char* root_seclabel = nullptr;
 
+static bool IsRecoveryMode() {
+    return android::base::GetProperty("ro.bootmode", "") == "recovery";
+}
+
 static bool should_drop_privileges() {
+    if (IsRecoveryMode()) {
+        std::string prop = android::base::GetProperty("service.adb.root", "");
+        if (prop == "1") {
+            return false;
+        }
+        if (prop == "0") {
+            return true;
+        }
+    }
+
     // The properties that affect `adb root` and `adb unroot` are ro.secure and
     // ro.debuggable. In this context the names don't make the expected behavior
     // particularly obvious.

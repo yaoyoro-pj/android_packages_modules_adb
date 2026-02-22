@@ -33,13 +33,24 @@
 #include "adb_io.h"
 #include "adb_unique_fd.h"
 
+#if defined(__ANDROID__)
+static bool IsRecoveryMode() {
+    return android::base::GetProperty("ro.bootmode", "") == "recovery";
+}
+#endif
+
 void restart_root_service(unique_fd fd) {
     if (getuid() == 0) {
         WriteFdExactly(fd.get(), "adbd is already running as root\n");
         return;
     }
 
+#if defined(__ANDROID__)
+    const bool is_recovery = IsRecoveryMode();
+#endif
+
 #if defined(__ANDROID__) && !defined(__ANDROID_RECOVERY__)
+    if (!is_recovery) {
     ndk::SpAIBinder binder = ndk::SpAIBinder(AServiceManager_getService("adbroot_service"));
     std::shared_ptr<aidl::android::adbroot::IADBRootService> service =
             aidl::android::adbroot::IADBRootService::fromBinder(binder);
@@ -47,22 +58,19 @@ void restart_root_service(unique_fd fd) {
         LOG(ERROR) << "Failed to get adbroot_service interface";
         return;
     }
-#endif
 
-#if defined(__ANDROID__) && !defined(__ANDROID_RECOVERY__)
     bool enabled = false;
     if (auto status = service->getEnabled(&enabled); !status.isOk()) {
-#endif
     if (!__android_log_is_debuggable()) {
         WriteFdExactly(fd.get(), "adbd cannot run as root in production builds\n");
         return;
     }
-#if defined(__ANDROID__) && !defined(__ANDROID_RECOVERY__)
     }
     if (!enabled) {
         WriteFdExactly(fd, "ADB Root access is disabled by system setting - "
                 "enable in Settings -> System -> Developer options\n");
         return;
+    }
     }
 #endif
 
